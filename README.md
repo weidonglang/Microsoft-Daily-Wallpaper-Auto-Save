@@ -216,3 +216,252 @@ python run_wallpapers.py --target both --profile default
 * Bing 模块保留原有并发下载、自动补齐、分类镜像与详尽日志。
 
 ---
+Here’s a complete, polished **English README** for your repo. Feel free to paste it into `README.md` as-is.
+
+---
+
+# Microsoft-Daily-Wallpaper-Auto-Save
+
+A practical, extensible toolkit for **saving wallpapers automatically**. It includes:
+
+* **Bing Daily Wallpaper Downloader** – fetches 4K/2K/1K with concurrency, auto-fills missing resolutions, archives by year/month, and mirrors category folders via hard links (with safe fallback). Uses Bing’s public `HPImageArchive.aspx` feed (with `idx`, `n`, `mkt`, `uhd` parameters); historical listings are limited and typically supplemented by community archives. ([Stack Overflow][1])
+* **Popular Wallpaper Fetcher (multi-source)** – concurrently searches multiple domestic/international sources (360 Wallpapers, Wallhaven, Openverse, Wikimedia), supports resumable downloads, content/perceptual de-duplication, fair scheduling across providers, and robust error handling. Wallhaven query controls like `sorting`, `topRange`, and `atleast` are supported. ([wallhaven.cc][2])
+* **Unified Launcher** – `run_wallpapers.py` runs **Bing**, **Popular**, or **Both**, reading `profiles.toml` presets and allowing one-off overrides via CLI.
+
+> **Notes & Sources**
+>
+> * The `HPImageArchive.aspx` endpoint is a commonly used public feed for Bing’s daily image; `idx` and `n` drive the date window (with `n` effectively limited to 0–7 in practice). ([Stack Overflow][1])
+> * Wallhaven API docs explain `sorting` (e.g., `date_added`, `toplist`, `random`), `topRange` (for toplist), and `atleast` (minimum resolution). ([wallhaven.cc][2])
+> * Openverse provides an API (token support available) for openly licensed media; verify license per item. ([api.openverse.org][3])
+> * Wikimedia’s MediaWiki API (`imageinfo`) returns original image URLs and sizes for filtering. ([MediaWiki][4])
+> * Resumable downloads use standard HTTP Range/Conditional requests (`206 Partial Content`; `If-None-Match` → `304 Not Modified`). ([MDN文档][5])
+
+---
+
+## Features
+
+* **Bing module**
+
+  * Parallel downloads; **automatic 2K/1K generation** from 4K (optional).
+  * Date-structured output (`YYYY/MM`) and **category mirrors** created via hard links (falls back to copy if needed).
+  * Solid logging, manifest, and safety checks.
+
+* **Popular module**
+
+  * Multiple providers: **q360** (CN-friendly), **Wallhaven**, **Openverse**, **Wikimedia**.
+  * **Resumable** downloads with `.part` files + image integrity check, **conditional requests** (ETag/Last-Modified).
+  * **De-dup** modes: URL / content (SHA-256) / perceptual (pHash); on duplicates, you can **keep** or **skip** the new file.
+  * **Fair round-robin scheduling** so one provider can’t starve the others.
+  * **Robust**: provider/network errors are handled gracefully and don’t crash the run.
+
+* **Launcher**
+
+  * `run_wallpapers.py` runs **Bing**, **Popular**, or **Both** from a single command.
+  * Uses `profiles.toml` presets; anything after `--` is passed verbatim to the chosen script.
+  * Shows merged effective options and the final command; supports dry-run.
+
+---
+
+## Directory Layout
+
+```
+BingWallpapers/
+  4k/ 2025/10/ 20251022-Varna_Bulgaria.4k.jpg
+  2k/ 2025/10/ ...
+  1k/ 2025/10/ ...
+  4k/ Animals/ ...    4k/ Landscapes/ ...  4k/ Other/ ...   ← category mirrors (hard links / fallback copy)
+
+popular/
+  wallhaven/
+    4k/ *.jpg ...
+    2k/ ...
+  q360/
+    4k/ ...
+  openverse/
+    4k/ ...
+  wikimedia/
+    4k/ ...
+  popular.sqlite3      ← metadata DB for de-dup & conditional requests
+```
+
+---
+
+## Installation
+
+> **Python**: 3.11/3.12 recommended (3.10+ is fine). Works on **Windows/macOS/Linux**.
+
+### One-shot (recommended)
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Minimal per module
+
+* **Bing**:
+
+  ```bash
+  pip install aiohttp aiosqlite pillow
+  ```
+* **Popular**:
+
+  ```bash
+  pip install requests tqdm pillow
+  # Optional perceptual de-dup:
+  pip install imagehash
+  # If using Python ≤ 3.10 and you want profiles:
+  pip install tomli
+  ```
+
+---
+
+## Quick Start
+
+### 1) Only Bing Daily Wallpapers
+
+```bash
+python bing_daily_wallpaper.py --years 1 --concurrency 12 --debug
+```
+
+Key flags:
+
+* `--dir` output directory (default `./BingWallpapers`)
+* `--mkt` market (default `zh-CN`, e.g. `en-US/ja-JP/...`)
+* `--years` look-back years (e.g. `0` = today only, `1` = last year)
+* `--no-gen-missing` don’t auto-generate 2K/1K from 4K
+
+> Bing’s feed is **not** a full historical API; `idx`/`n` typically cover **only the last ~8 images**. You can supplement older items via community archives. ([Microsoft Learn][6])
+
+### 2) Only Popular Wallpapers (multi-source)
+
+```bash
+python fetch_popular_wallpapers.py \
+  --providers q360 wallhaven \
+  --res 4k 2k 1k \
+  --limit-per 60 \
+  --wh-sorting date_added \
+  --dup-mode content --dup-action keep \
+  --max-workers 16 --robots on --verbose
+```
+
+Common options:
+
+* `--providers`: `q360 wallhaven openverse wikimedia` (mix & match)
+
+  * **Wallhaven**: `--wh-sorting date_added|toplist|random`, `--wh-toprange 1w|1M|…` (for toplist), `--wh-seed 20251022` (random + reproducible). ([wallhaven.cc][2])
+* `--res`: `4k 2k 1k`
+* `--q`: keyword search (q360 / wallhaven / openverse)
+* `--dup-mode`: `url` / `content` (SHA-256) / `perceptual` (pHash)
+* `--dup-action`: `keep` (default) / `skip`
+* `--robots on|off|strict`
+* Resumable/conditional behavior is automatic (`Range` → `206`, `If-None-Match` → `304`). ([MDN文档][5])
+
+> **Openverse**: tokens are supported and improve stability/quotas; always double-check the license of each item before redistribution. ([api.openverse.org][3])
+> **Wikimedia**: we use `imageinfo` to retrieve original URLs and sizes for resolution filters. ([MediaWiki][4])
+
+### 3) Unified Launcher (Bing / Popular / Both)
+
+Generate a template config:
+
+```bash
+python run_wallpapers.py --init
+```
+
+Run **both** (Bing first, then Popular) using the `default` profile:
+
+```bash
+python run_wallpapers.py --target both --profile default --verbose-launcher
+```
+
+Run **only Popular** and override a few options (everything after `--` is passed to the Popular script):
+
+```bash
+python run_wallpapers.py --target popular --profile default -- \
+  --providers q360 wallhaven --res 4k 2k --limit-per 60 \
+  --dup-mode content --dup-action keep --wh-sorting random --wh-seed 20251022
+```
+
+---
+
+## Configuration: `profiles.toml` (optional but recommended)
+
+```toml
+[profiles.default]
+  [profiles.default.bing]
+  years = 1
+  mkt = "zh-CN"
+  concurrency = 8
+  debug = false
+
+  [profiles.default.popular]
+  providers   = ["q360", "wallhaven", "openverse"]
+  res         = ["4k", "2k", "1k"]
+  limit_per   = 60
+  max_workers = 16
+  dup_mode    = "content"     # url | content | perceptual
+  dup_action  = "keep"        # keep | skip
+  robots      = "on"          # on | off | strict
+  wh_sorting  = "date_added"  # or toplist/random
+  # wh_toprange = "1M"        # when sorting = toplist
+  # wh_seed     = "20251022"  # when sorting = random
+  verbose     = true
+```
+
+Run with:
+
+```bash
+python run_wallpapers.py --target both --profile default
+```
+
+---
+
+## De-dup Strategy & Database
+
+* **URL-level**: skip before download when `(provider,resid,url)` repeats.
+* **Content-level**: SHA-256 digest; by default we **keep** the newly downloaded file but ignore duplicate records (choose `--dup-action skip` to discard new files).
+* **Perceptual**: optional pHash similarity check for near-duplicates.
+
+The fetcher stores metadata in `popular/popular.sqlite3` (including ETag/Last-Modified) and supports **resumable** transfers (`Range`) and **conditional** GETs (`304`). ([MDN文档][5])
+
+---
+
+## FAQ
+
+**Why does Bing only provide the most recent ~8 images?**
+Because the public `HPImageArchive.aspx` feed’s `n` parameter effectively supports 0–7. For older images, use third-party archives. ([Microsoft Learn][6])
+
+**Wallhaven “Toplist” keeps repeating the same set**
+Switch to `--wh-sorting date_added` (newest first) or `random` (optionally add `--wh-seed` for reproducibility), and increase `--limit-per` to traverse more pages. ([wallhaven.cc][2])
+
+**Can I use Openverse images commercially?**
+Openverse indexes openly licensed/public-domain works, but you must verify the **specific license and attribution** for each item before use. ([api.openverse.org][3])
+
+---
+
+## Compliance & Attribution
+
+* Respect each site’s **terms** and **robots.txt**.
+* Check **licenses** carefully (especially for Openverse/Wikimedia).
+* HTTP behaviors (Range/Conditional) follow web standards (`206`, `304`) to reduce bandwidth. ([MDN文档][5])
+
+---
+
+## Changelog & Repository
+
+Your historical changelog and repo are available here:
+**GitHub:** `weidonglang/Microsoft-Daily-Wallpaper-Auto-Save` (this repository)
+
+---
+
+## Contributing
+
+Issues and PRs are welcome. If you’d like a ready-made preset in `profiles.toml` (e.g., daily random Wallhaven + CN-friendly sources), open an issue and we’ll add it.
+
+---
+
+## License
+
+This project is provided for educational and personal archival purposes. You are responsible for compliance with third-party content licenses and terms.
+
+
