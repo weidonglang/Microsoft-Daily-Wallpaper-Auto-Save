@@ -1,0 +1,62 @@
+# 统一启动器 run_wallpapers.py 的示例配置
+# 说明：每个 profile 下分别给 bing / popular 配置；
+# 若只写了 bing 段，popular 会用其脚本默认参数。
+
+[profiles.default]
+  [profiles.default.bing]
+  years = 1
+  mkt = "zh-CN"
+  concurrency = 8
+  debug = true
+  # dir = "out"
+  # jobs = 4
+  # no_gen_missing = true
+
+  [profiles.default.popular]
+  providers = ["q360", "wallhaven", "openverse"]
+  res = ["4k", "2k", "1k"]
+  limit_per = 60
+  max_workers = 16
+  dup_mode = "content"       # url | content | perceptual
+  dup_action = "keep"        # keep | skip
+  robots = "on"              # on | off | strict
+  wh_sorting = "date_added"  # date_added | toplist | random
+  # wh_toprange = "1M"       # toplist 时使用
+  # wh_seed = ""             # random 时可指定
+  verbose = true
+
+[profiles.slow]
+  [profiles.slow.bing]
+  years = 1
+  mkt = "zh-CN"
+  concurrency = 3
+
+  [profiles.slow.popular]
+  providers = ["q360", "wallhaven"]
+  res = ["4k"]
+  limit_per = 30
+  max_workers = 6
+  dup_mode = "url"
+  dup_action = "keep"
+  robots = "on"
+  wh_sorting = "date_added"
+  verbose = true
+
+[profiles.max]
+  [profiles.max.bing]
+  years = 2
+  mkt = "en-US"
+  concurrency = 12
+  debug = true
+
+  [profiles.max.popular]
+  providers = ["q360", "wallhaven", "openverse"]
+  res = ["4k", "2k"]
+  limit_per = 80
+  max_workers = 20
+  dup_mode = "content"
+  dup_action = "keep"
+  robots = "on"
+  wh_sorting = "random"
+  wh_seed = "20251022"  # 可改为 today/日期任意字符串
+  verbose = true
