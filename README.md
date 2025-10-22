@@ -1,7 +1,3 @@
-下面是给你仓库的新 README（已包含“Bing 每日壁纸下载器 + 流行壁纸抓取器 + 启动器”的一体化使用说明、依赖、配置、常见问题与合规说明）。你可以直接把整段内容保存为 **README.md**。
-
----
-
 # Microsoft-Daily-Wallpaper-Auto-Save
 
 一个实用、可扩展的**壁纸自动保存**工具集，包含：
@@ -220,11 +216,3 @@ python run_wallpapers.py --target both --profile default
 * Bing 模块保留原有并发下载、自动补齐、分类镜像与详尽日志。
 
 ---
-
-若你希望我把当前仓库里的 `README.md`直接替换为上面的新版本，或把示例命令改成你个人的常用参数组合，告诉我即可。
-
-[1]: https://learn.microsoft.com/en-us/answers/questions/1473961/bing-hpimagearchive-aspx-question?utm_source=chatgpt.com "Bing HPImageArchive.aspx question - Microsoft Q&A"
-[2]: https://wallhaven.cc/help/api?utm_source=chatgpt.com "API v1 Documentation"
-[3]: https://api.openverse.org/?utm_source=chatgpt.com "Openverse API"
-[4]: https://www.mediawiki.org/wiki/API%3AImageinfo?utm_source=chatgpt.com "API:Imageinfo"
-[5]: https://docs.openverse.org/_preview/2205/api/reference/made_with_ov.html?utm_source=chatgpt.com "Made with Openverse"
