@@ -1,185 +1,230 @@
-# Bing 每日壁纸下载器 · Async + 4K/2K/1K + 分类镜像
+下面是给你仓库的新 README（已包含“Bing 每日壁纸下载器 + 流行壁纸抓取器 + 启动器”的一体化使用说明、依赖、配置、常见问题与合规说明）。你可以直接把整段内容保存为 **README.md**。
 
-一个**并发**下载 Bing 每日壁纸的 Python 脚本，支持：
+---
 
-* **分辨率**：4K / 2K / 1K（缺失时可由 4K**自动下采样补齐**）
-* **目录结构**：按 `年/月` 归档，并在同级建立「动物 / 自然景色 / 其他」**平铺分类镜像**（使用**硬链接**；跨盘符自动回退为文件复制）
-* **回溯下载**：可一键回补近 N 年历史
-* **稳定 & 高速**：`aiohttp` 并发、失败重试、SQLite manifest（WAL 模式）避免重复请求
-* **强兜底**：自动从社区归档获取历史条目（遇到大图会在本地**规范化落尺**为 2K/1K）
-* **可观测**：`--debug` 输出详细日志（HEAD/GET/重试/生成/落尺/硬链接等）
+# Microsoft-Daily-Wallpaper-Auto-Save
 
-> ⚙️ 依据：Bing 的公开接口 `HPImageArchive.aspx` 可获取当期/近几天的元数据（参数 `idx/n/mkt/uhd`），但 **`n` 仅 1–8**，官方**不提供**全量历史接口；历史通常借助第三方归档（如 `bing.npanuhin.me`）。非 4K 的分辨率通常依据 `urlbase` 规则拼接，例如 `_1920x1080.jpg`、`_1920x1200.jpg`。([微软学习][1])
+一个实用、可扩展的**壁纸自动保存**工具集，包含：
+
+* **Bing 每日壁纸下载器**：并发抓取 4K/2K/1K，自动补齐缺失分辨率，按年/月归档并生成“分类镜像（硬链接/回退复制）”。（基于 Bing 的公开接口 `HPImageArchive.aspx`；历史记录通过社区归档补全）([Microsoft Learn][1])
+* **流行壁纸抓取器（多源）**：国内/国外多站点（360 壁纸、Wallhaven、Openverse、Wikimedia）并发检索 + 断点续传 + 内容/感知去重，统一保存到 `popular/<provider>/<res>/`。支持随机/最新/热榜、关键词等筛选；网络异常自动跳过。([wallhaven.cc][2])
+* **统一启动器**：`run_wallpapers.py` 可选择运行 **Bing** / **Popular** / **Both**，支持 `profiles.toml` 预设与命令行即时覆盖。
+
+> **致谢与来源**
+>
+> * Bing 每日图片元数据通过 `HPImageArchive.aspx` 获取（`idx/n/mkt/uhd`；`n` 范围 0–7），历史常需借助第三方归档（例如 `bing.npanuhin.me`）。([Microsoft Learn][1])
+> * Wallhaven 官方 API 提供 `sorting`（`date_added/toplist/random`）、`atleast`（最小分辨率）等筛选参数。([wallhaven.cc][2])
+> * Openverse API 提供开放授权图片检索，支持访问令牌；其内容以 CC 许可或公有领域为主，但仍需自行核验具体条目许可。([api.openverse.org][3])
+> * Wikimedia 通过 MediaWiki Action API 的 `imageinfo` 模块可查询图片原始 URL 与尺寸。([MediaWiki][4])
 
 ---
 
 ## 目录结构
 
-主文件（按年月归档）：
-
 ```
 BingWallpapers/
-  4k/  2025/10/ 20251020-鸟喙的故事.4k.jpg
-  2k/  2025/10/ 20251020-鸟喙的故事.2k.jpg
-  1k/  2025/10/ 20251020-鸟喙的故事.1k.jpg
-```
+  4k/ 2025/10/ 20251022-贝洛格拉齐克石林.4k.jpg
+  2k/ 2025/10/ 20251022-贝洛格拉齐克石林.2k.jpg
+  1k/ 2025/10/ 20251022-贝洛格拉齐克石林.1k.jpg
+  4k/ 动物/…    4k/ 自然景色/…   4k/ 其他/…   ← 分类镜像（硬链接/复制）
 
-平铺分类镜像（硬链接或复制）：
-
+popular/
+  wallhaven/
+    4k/ *.jpg…
+    2k/ *.jpg…
+  q360/
+    4k/ …
+  openverse/
+    4k/ …
+  wikimedia/
+    4k/ …
+  popular.sqlite3            ← 下载/去重/条件请求等的记录库
 ```
-BingWallpapers/
-  4k/ 动物/       20251020-鸟喙的故事.4k.jpg
-  4k/ 自然景色/   ...
-  4k/ 其他/       ...
-  2k/ 动物/ ...
-  1k/ 自然景色/ ...
-```
-
-> 注：Windows 下**硬链接**仅限**同一分区**。若不在同一卷或创建失败，脚本会自动回退为复制。
 
 ---
 
 ## 安装
 
+> **Python 版本**：建议 3.11/3.12（3.10+ 也可）。
+> **Windows**、**macOS**、**Linux** 通用。
+
+### 方式 A：一把梭（推荐）
+
 ```bash
 python -m pip install --upgrade pip
-pip install aiohttp aiosqlite pillow
+pip install -r requirements.txt
 ```
 
-* Python 3.10+（建议 3.11/3.12）
-* 依赖：`aiohttp`、`aiosqlite`、`Pillow`
+> 你也可以按功能最小化安装（见下）。
+
+### 方式 B：分模块最小化安装
+
+* **Bing 每日壁纸下载器**：
+
+  ```bash
+  pip install aiohttp aiosqlite pillow
+  ```
+* **流行壁纸抓取器**：
+
+  ```bash
+  pip install requests tqdm pillow
+  # 可选：近似去重（感知哈希）
+  pip install imagehash
+  # Python 3.10 及更早版本读取 profiles.toml 需要：
+  pip install tomli
+  ```
 
 ---
 
-## 使用
+## 快速开始
+
+### 1）仅运行 Bing 每日壁纸
 
 ```bash
-# 最常用：回溯近 1 年，12 并发，显示调试日志
 python bing_daily_wallpaper.py --years 1 --concurrency 12 --debug
 ```
 
-### 命令行参数
+* `--dir` 输出目录（默认 `./BingWallpapers`）
+* `--mkt` 市场（默认 `zh-CN`，可改 `en-US/ja-JP/...`）
+* `--years` 回溯年数（比如 0=仅当日，1=近一年）
+* `--no-gen-missing` 不从 4K 自动补 2K/1K
 
-* `--dir`：保存根目录（默认 `./BingWallpapers`）
-* `--mkt`：市场/地区（默认 `zh-CN`；常见值如 `en-US`、`ja-JP` 等）
+> 说明：Bing 官方接口可获取当日及近几天元数据（`idx/n/mkt/uhd`），但**不提供全量历史**；`n` 的有效范围为 0–7。历史通常通过第三方归档补齐。([Microsoft Learn][1])
 
-  > Bing 官方接口按市场返回当天图片的元数据。可在此处切换不同市场。([codeproject.com][2])
-* `--years`：回溯年数（默认 5）
-* `--concurrency`：HTTP 并发数（默认 8，建议 6–16）
-* `--jobs`：回溯任务并发（默认与 `--concurrency` 相同；若设为 1，日志更接近“同一天 4K→2K→1K 连续输出”，便于肉眼核对）
-* `--debug`：打印详细调试日志
-* `--no-gen-missing`：不从 4K 自动补齐 2K/1K（默认会补齐）
-
-### 运行示例
+### 2）仅运行“流行壁纸抓取器”
 
 ```bash
-# 回溯近 5 年，8 并发
-python bing_daily_wallpaper.py --years 5 --concurrency 8
+python fetch_popular_wallpapers.py \
+  --providers q360 wallhaven \
+  --res 4k 2k 1k \
+  --limit-per 60 \
+  --wh-sorting date_added \
+  --dup-mode content --dup-action keep \
+  --max-workers 16 --robots on --verbose
+```
 
-# 仅当日（不回溯），保守请求，且不启用 4K 下采样补齐
-python bing_daily_wallpaper.py --years 0 --concurrency 4 --no-gen-missing
+常用参数：
 
-# 切换市场为 en-US
-python bing_daily_wallpaper.py --years 1 --mkt en-US --concurrency 12 --debug
+* `--providers`：`q360 wallhaven openverse wikimedia`（任意组合）
+
+  * **Wallhaven 参数**：`--wh-sorting date_added|toplist|random`、`--wh-toprange 1w|1M|...`、`--wh-seed 20251022`（随机+复现）([wallhaven.cc][2])
+* `--res`：`4k 2k 1k`
+* `--q`：关键词检索（q360/wallhaven/openverse 支持）
+* `--dup-mode`：`url`（URL 级） / `content`（SHA-256 内容级）/ `perceptual`（感知哈希近似）
+* `--dup-action`：`keep`（默认，保留新文件） / `skip`（节省磁盘）
+* `--robots on|off|strict`：是否遵守 `robots.txt`
+* 断点续传、304 条件请求、网络错误自动跳过均为内建默认行为。
+
+> 提示：
+>
+> * Wallhaven 的 `atleast`（最小分辨率）、`sorting`（最新/热榜/随机）等均受官方 API 支持。([wallhaven.cc][2])
+> * Openverse 需令牌可获得更稳配额；其内容以 CC 许可/公有领域为主，但**仍需自行核实每张图片的具体许可**。([api.openverse.org][3])
+> * Wikimedia 可用 `imageinfo` 获取原图 URL 与尺寸做筛选。([MediaWiki][4])
+
+### 3）用统一启动器（可二选一/同时跑）
+
+先生成一个模板配置：
+
+```bash
+python run_wallpapers.py --init
+```
+
+跑 **两个** 子程序（先 Bing 后 Popular）：
+
+```bash
+python run_wallpapers.py --target both --profile default --verbose-launcher
+```
+
+只跑 **Popular** 并覆盖部分参数（`--` 之后原样透传给子脚本）：
+
+```bash
+python run_wallpapers.py --target popular --profile default -- \
+  --providers q360 wallhaven --res 4k 2k --limit-per 60 \
+  --dup-mode content --dup-action keep --wh-sorting random --wh-seed 20251022
 ```
 
 ---
 
-## 工作原理（简述）
+## 配置：`profiles.toml`（可选但推荐）
 
-1. **今日数据**：调用
-   `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=<MKT>&uhd=1`
-   获取当日元数据与 4K 直链；其它分辨率由 `urlbase` 规则尝试拼接。([codeproject.com][2])
-2. **历史回溯**：按年份从 `bing.npanuhin.me` 拉取 JSON 清单（或全量清单再按年筛），对每条记录尝试微软源与归档直链；归档直链返回**大图**时，本地**规范化落尺**到 2K/1K 保存。([GitHub][3])
-3. **三分辨率策略**：
+```toml
+[profiles.default]
+  [profiles.default.bing]
+  years = 1
+  mkt = "zh-CN"
+  concurrency = 8
+  debug = false
 
-   * **4K**：优先使用官方直链 `_UHD.jpg`；
-   * **2K/1K**：按常见后缀试探（例：`_1920x1200.jpg`、`_1920x1080.jpg`），失败则：
+  [profiles.default.popular]
+  providers = ["q360", "wallhaven", "openverse"]
+  res = ["4k", "2k", "1k"]
+  limit_per = 60
+  max_workers = 16
+  dup_mode = "content"     # url | content | perceptual
+  dup_action = "keep"      # keep | skip
+  robots = "on"            # on | off | strict
+  wh_sorting = "date_added"
+  # wh_toprange = "1M"     # toplist 时使用
+  # wh_seed = "20251022"   # random 时可复现
+  verbose = true
+```
 
-     * 若有 4K：**从 4K 下采样**生成；
-     * 若是归档直链：直接下载并在本地**落尺规范**。([Mathematica Stack Exchange][4])
-4. **并发 & 去重**：`aiohttp` 限流并发 + SQLite manifest（WAL）记录 `(mkt, 日期, 分辨率)`，避免重复下载；失败任务独立降级，不影响其它条目。
-5. **分类镜像**：根据标题/版权等关键词进行**粗分类**（动物 / 自然景色 / 其他），在每个分辨率下创建平铺目录，通过**硬链接**镜像主文件（跨盘符回退为复制）。
-6. **日志可观测**：`--debug` 输出 HEAD/Range 试探、GET 重试、规范化落尺、硬链接回退等详细信息。
+运行时使用：
+
+```bash
+python run_wallpapers.py --target both --profile default
+```
 
 ---
 
-## 性能建议
+## 去重策略 & 数据库说明
 
-* 典型环境建议 `--concurrency 8~16`；**归档直链**偶尔响应慢，适当增大并发可提升吞吐。
-* 回溯时可设置 `--jobs 1` 获取“按日串行”的更清晰日志；若追求速度可与 `--concurrency` 保持一致。
-* Windows 磁盘同卷可享受**硬链接**的零复制镜像；跨卷自动使用复制。
+* **URL 级**：同一 `(provider, resid, url)` 直接跳过（下载前即可判定）。
+* **内容级**：计算 SHA-256，发现已存在内容时，默认 **保留** 新下载文件并忽略重复记录；也可 `--dup-action skip` 丢弃新文件。
+* **近似去重**（可选）：感知哈希 pHash，对相似图（默认汉明距离 ≤5）进行合并/忽略（需 `imagehash`）。
+
+所有抓取/去重/条件请求（ETag/Last-Modified）信息保存在 `popular/popular.sqlite3`，支持断点续传与 304。HTTP 条件请求/续传是通用 Web 标准行为，服务端返回 `206 Partial Content` 或 `304 Not Modified` 时可显著减少传输。([wallhaven.cc][2])
 
 ---
 
 ## 常见问题（FAQ）
 
-**Q1：为什么只下到了 2K/1K，看起来没 4K？**
-A：通常是你**删除了图片文件但保留了 `downloads.sqlite3`**，manifest 仍认为该 `(市场, 日期, 4k)` 已完成，从而跳过 4K。
+* **Bing 为什么有时只有近 8 天？**
+  因为 `HPImageArchive.aspx` 的 `n` 参数官方范围是 0–7（最多返回近 8 张）。更早历史需用第三方归档源补齐。([Microsoft Learn][1])
 
-* 解决：删除 `BingWallpapers/downloads.sqlite3` 后重跑；或启用我们在脚本中提供/建议的**清单自修复**逻辑（启动时剔除已不存在的文件记录）。
+* **Wallhaven “热榜”总是那几张？**
+  可改用 `--wh-sorting date_added`（按最新）或 `random`（配 `--wh-seed` 做可复现随机），并调大 `--limit-per` 翻页抓取。([wallhaven.cc][2])
 
-**Q2：为什么不是“同一天的 4K/2K/1K 连续”打印？**
-A：脚本**并发**处理多个日期；同一日期内部是 4K→2K→1K 的顺序，但不同日期的日志会**交错**输出。把 `--jobs` 设为 `1` 即可更线性。
-
-**Q3：为什么 2K/1K 有时 404？**
-A：Bing 公开接口仅覆盖**近几天**且**不保证**所有分辨率；2K/1K 多为“根据 `urlbase` 规则拼接”的**约定俗成**后缀，因此并非每天都可用，我们会自动退回 4K 下采样或归档直链。([微软学习][1])
-
-**Q4：历史能拉多远？**
-A：官方接口 `HPImageArchive.aspx` 的 `n` 参数仅 **1–8**，无法获取全历史；本项目借助第三方归档（`bing.npanuhin.me`）补齐历史。([微软学习][1])
+* **Openverse 是否可直接商用？**
+  Openverse 聚合了 CC 许可/公有领域内容，但平台本身不保证每条目许可准确性，**发布/分发请务必自行复核**。([docs.openverse.org][5])
 
 ---
 
-## 计划任务（可选）
+## 贡献与致谢
 
-* **Windows 任务计划程序**：新建「每日 09:00」任务，操作指向：
-
-  ```powershell
-  python "C:\Path\to\bing_daily_wallpaper.py" --years 0 --concurrency 8
-  ```
-* **Linux/macOS Cron**：
-
-  ```cron
-  0 9 * * * /usr/bin/python3 /path/to/bing_daily_wallpaper.py --years 0 --concurrency 8 >> /path/to/wall.log 2>&1
-  ```
+* 感谢 Bing 提供每日图片内容接口与社区归档生态。接口参数示例与讨论可见相关 Q&A/帖子。([Microsoft Learn][1])
+* 感谢 Wallhaven、Openverse、Wikimedia 开放 API。本文档中参数示例/注意事项依据其官方文档。([wallhaven.cc][2])
 
 ---
 
-## 法律与致谢
+## 免责声明
 
-* **版权**：图片版权归 **Microsoft / Bing** 及摄影师所有。仅供**个人学习/收藏**用途，请遵守相关条款与当地法律。可参考微软 Bing Wallpaper 的产品页与相关服务条款。([Microsoft][5])
-* **数据来源**：
-
-  * Bing 公共接口 `HPImageArchive.aspx`（参数 `format/idx/n/mkt/uhd`；`n` 范围 1–8）。([codeproject.com][2])
-  * 第三方归档 **Bing-Wallpaper-Archive**（`bing.npanuhin.me`，提供年/全量 JSON 与直链存储）。([GitHub][3])
-  * `urlbase + _分辨率.jpg` 的社区约定与示例。([Mathematica Stack Exchange][4])
-  * 微软“Recent homepage images”页面（可人工核对当期图片）。([Search - Microsoft Bing][6])
-
-感谢这些项目与社区讨论为本工具提供灵感与参考！
+* 本项目仅用于**学习与个人收藏**。请遵守各站点 `robots.txt`、图片许可与使用条款。对第三方内容的版权与合规性请**自行负责**。Openverse 条款特别提醒：务必核实单条目许可信息。([docs.openverse.org][5])
 
 ---
 
-## 许可证
+## 变更摘要（相对旧版）
 
-建议使用 **MIT License**（或根据你的需要替换）。在仓库根目录添加 `LICENSE` 文件即可。
-
----
-
-## 开发脚注（How it works, for developers）
-
-* 网络：统一将 Bing 主机**规范为** `https://www.bing.com`，减少重定向/缓存差异；归档直链则**直接 GET**（部分对象存储对 HEAD/Range 支持不一致）。
-* 并发：`aiohttp` + 限流信号量；每个 URL 带 429 退避和有限重试，**404 不重试**以节省时间。
-* 去重：SQLite（WAL）存 `(mkt, date, res)` 作为唯一键；进程内也有内存缓存防重复。
-* 生成与落尺：缺 2K/1K 时从 4K **LANCZOS** 下采样；从归档获得大图时会在保存到 `2k/1k` 前**规范化分辨率**到目标盒（<=2560×1440、<=1920×1080）。
-* 分类：以标题/版权等文本做**关键词启发式粗分类**（动物 / 自然景色 / 其他）。
-* 链接：分类镜像优先创建**硬链接**；失败（跨盘符/权限）时自动复制。
+* 新增 **流行壁纸抓取器（多源）**，支持国内/国外源、并发检索与断点续传，内容/近似去重；失败自动跳过，不中断整体任务。
+* 新增 **统一启动器**，支持 `profiles.toml` 与命令行覆盖；一条命令可运行 `bing/popular/both`。
+* Bing 模块保留原有并发下载、自动补齐、分类镜像与详尽日志。
 
 ---
 
-### 参考链接
+若你希望我把当前仓库里的 `README.md`直接替换为上面的新版本，或把示例命令改成你个人的常用参数组合，告诉我即可。
 
-* Microsoft Q&A：`n` 参数仅 1–8，官方无历史全量接口。([微软学习][1])
-* 公开 JSON 示例与参数说明（`format=js&idx=0&n=1&mkt=...`）。([codeproject.com][2])
-* `urlbase` + 后缀构造多分辨率的社区实践。([Mathematica Stack Exchange][4])
-* 第三方归档项目 **npanuhin/Bing-Wallpaper-Archive**。([GitHub][3])
-* Bing “Recent homepage images” 页面。([Search - Microsoft Bing][6])
+[1]: https://learn.microsoft.com/en-us/answers/questions/1473961/bing-hpimagearchive-aspx-question?utm_source=chatgpt.com "Bing HPImageArchive.aspx question - Microsoft Q&A"
+[2]: https://wallhaven.cc/help/api?utm_source=chatgpt.com "API v1 Documentation"
+[3]: https://api.openverse.org/?utm_source=chatgpt.com "Openverse API"
+[4]: https://www.mediawiki.org/wiki/API%3AImageinfo?utm_source=chatgpt.com "API:Imageinfo"
+[5]: https://docs.openverse.org/_preview/2205/api/reference/made_with_ov.html?utm_source=chatgpt.com "Made with Openverse"
