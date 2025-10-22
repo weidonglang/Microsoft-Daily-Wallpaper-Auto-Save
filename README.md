@@ -216,9 +216,6 @@ python run_wallpapers.py --target both --profile default
 * Bing 模块保留原有并发下载、自动补齐、分类镜像与详尽日志。
 
 ---
-Here’s a complete, polished **English README** for your repo. Feel free to paste it into `README.md` as-is.
-
----
 
 # Microsoft-Daily-Wallpaper-Auto-Save
 
