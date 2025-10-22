@@ -1,0 +1,12 @@
+# outputs
+BingWallpapers/BingWallpapers/
+BingWallpapers/popular/
+*.sqlite3
+
+# venv / cache
+.venv/
+__pycache__/
+
+# OS noise
+.DS_Store
+Thumbs.db
